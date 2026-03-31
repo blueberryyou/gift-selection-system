@@ -481,23 +481,8 @@
     </style>
 </head>
 <body>
-    <!-- 登录页面 -->
-    <div id="login-page" class="login-page">
-        <div class="login-box">
-            <h1>🎁 达标奖励系统</h1>
-            <form id="login-form">
-                <div class="form-group">
-                    <label>请输入访问密码</label>
-                    <input type="password" id="login-password" required placeholder="请输入密码" autocomplete="off">
-                </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%;">登录</button>
-                <div id="login-error" class="login-error"></div>
-            </form>
-        </div>
-    </div>
-
     <!-- 主应用 -->
-    <div id="main-app" class="container" style="display: none;">
+    <div id="main-app" class="container">
         <header>
             <h1>🎁 达标奖励礼物选择系统</h1>
             <p>恭喜达标！请按达标顺序选择您心仪的礼物</p>
@@ -506,7 +491,7 @@
         <div class="tabs">
             <button class="tab active" onclick="switchTab('gifts')">选择礼物</button>
             <button class="tab" onclick="switchTab('records')">选择记录</button>
-            <button class="tab" onclick="switchTab('admin')">管理后台</button>
+            <button class="tab" onclick="switchTab('admin', true)">管理后台</button>
         </div>
 
         <!-- 礼物选择页面 -->
@@ -561,6 +546,24 @@
         </div>
     </div>
 
+    <!-- 管理员密码验证弹窗 -->
+    <div id="admin-password-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">管理员验证</div>
+            <form id="admin-password-form">
+                <div class="form-group">
+                    <label>请输入管理员密码</label>
+                    <input type="password" id="admin-password" required placeholder="请输入密码" autocomplete="off">
+                </div>
+                <div id="admin-password-error" class="login-error"></div>
+                <div class="modal-buttons">
+                    <button type="button" class="btn btn-secondary" onclick="closeAdminPasswordModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">确认</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- 选择礼物弹窗 -->
     <div id="select-modal" class="modal">
         <div class="modal-content">
@@ -611,29 +614,40 @@
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        // 系统密码（实际使用时应该存在服务器端）
-        const SYSTEM_PASSWORD = "xrs2024";
+        // 管理员密码
+        const ADMIN_PASSWORD = "xes2026";
 
-        // 登录验证
-        document.getElementById('login-form').addEventListener('submit', function(e) {
+        // 管理员密码验证
+        let pendingAdminTab = null;
+        document.getElementById('admin-password-form').addEventListener('submit', function(e) {
             e.preventDefault();
-            const password = document.getElementById('login-password').value;
+            const password = document.getElementById('admin-password').value;
 
-            if (password === SYSTEM_PASSWORD) {
-                document.getElementById('login-page').style.display = 'none';
-                document.getElementById('main-app').style.display = 'block';
-                sessionStorage.setItem('authenticated', 'true');
-                initApp();
+            if (password === ADMIN_PASSWORD) {
+                sessionStorage.setItem('adminAuthenticated', 'true');
+                closeAdminPasswordModal();
+                if (pendingAdminTab) {
+                    switchTabDirectly(pendingAdminTab);
+                    pendingAdminTab = null;
+                }
             } else {
-                document.getElementById('login-error').textContent = '密码错误，请重试';
+                document.getElementById('admin-password-error').textContent = '密码错误，请重试';
             }
         });
 
-        // 检查登录状态
-        if (sessionStorage.getItem('authenticated') === 'true') {
-            document.getElementById('login-page').style.display = 'none';
-            document.getElementById('main-app').style.display = 'block';
+        // 关闭管理员密码弹窗
+        function closeAdminPasswordModal() {
+            document.getElementById('admin-password-modal').classList.remove('active');
+            document.getElementById('admin-password-form').reset();
+            document.getElementById('admin-password-error').textContent = '';
         }
+
+        // 点击模态框外部关闭
+        document.getElementById('admin-password-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAdminPasswordModal();
+            }
+        });
 
         // 图片预览
         document.getElementById('screenshot-upload').addEventListener('change', function(e) {
@@ -875,10 +889,33 @@
         }
 
         // 切换标签页
-        function switchTab(tabName) {
+        function switchTab(tabName, requiresAuth = false) {
+            // 如果是管理后台且需要验证
+            if (requiresAuth && tabName === 'admin') {
+                // 检查是否已验证
+                if (sessionStorage.getItem('adminAuthenticated') !== 'true') {
+                    pendingAdminTab = tabName;
+                    document.getElementById('admin-password-modal').classList.add('active');
+                    return;
+                }
+            }
+
+            switchTabDirectly(tabName);
+        }
+
+        // 直接切换标签（不进行验证）
+        function switchTabDirectly(tabName) {
             // 切换标签按钮
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-            event.target.classList.add('active');
+            // 找到对应的标签按钮并激活
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                if ((tabName === 'gifts' && tab.textContent.includes('选择礼物')) ||
+                    (tabName === 'records' && tab.textContent.includes('选择记录')) ||
+                    (tabName === 'admin' && tab.textContent.includes('管理后台'))) {
+                    tab.classList.add('active');
+                }
+            });
 
             // 切换内容
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
@@ -959,6 +996,11 @@
             renderStock();
             setupRealtimeListeners();
         }
+
+        // 页面加载时自动初始化
+        window.addEventListener('DOMContentLoaded', function() {
+            initApp();
+        });
     </script>
 </body>
 </html>
